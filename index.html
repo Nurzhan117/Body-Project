@@ -85,9 +85,22 @@ body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);max-w
 .mc-lbl{font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-top:5px}
 
 /* ── LEVEL ── */
-.lvl-card{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:16px 18px;margin-bottom:10px;box-shadow:var(--shadow-soft)}
-.lvl-left{display:flex;align-items:center;gap:14px}
-.lvl-badge{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#3d6bce,#6b8ff0);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 8px rgba(61,107,206,.25)}
+.lvl-card{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:9px 16px;box-shadow:var(--shadow-soft)}
+.lvl-left{display:flex;align-items:center;gap:12px}
+.rank-emblem{width:64px;height:64px;flex:none;display:grid;place-items:center;font-size:30px;line-height:1}
+.rank-emblem img{width:100%;height:100%;object-fit:contain}
+.lvl-badge{width:76px;height:76px;font-size:34px}
+.lvl-badge img{filter:drop-shadow(0 3px 5px rgba(26,31,58,.24))}
+.lvl-badge-negative{width:44px;height:44px;border-radius:12px;background:#fff;box-shadow:0 2px 8px rgba(224,92,92,.18);font-size:22px}
+.rank-row{display:flex;align-items:center;gap:clamp(6px,3vw,12px);padding:8px 6px;border:1px solid transparent;border-bottom-color:var(--border)}
+.rank-row-current{background:#edf9f2;border-color:#b9dfcb;border-radius:12px}
+.rank-row-title{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;font-size:14px;font-weight:700}
+.rank-current-label{font-size:9px;font-weight:700;color:#245e46}
+.rank-row-stars{font-size:14px;letter-spacing:1px;color:#68738f}
+.rank-star-earned{color:#a66a00}
+.rank-row-thresholds{display:flex;flex-wrap:wrap;column-gap:4px;font-size:12px;color:var(--text2)}
+.rank-row-checks{font-size:11px;color:#245e46;font-weight:600}
+#levels-list{overflow-y:auto;min-height:0;padding:0 clamp(8px,4vw,24px) 24px;flex:1}
 .lvl-info{display:flex;flex-direction:column;gap:4px}
 .lvl-title{font-size:15px;font-weight:600;color:var(--text)}
 .lvl-coef{font-size:13px;font-weight:700;color:#5585e8;letter-spacing:0;line-height:1.6}
@@ -430,7 +443,7 @@ minput-label{display:block;font-size:9px;font-weight:600;letter-spacing:1.5px;te
 
 .lvlup-overlay{position:fixed;inset:0;background:rgba(10,30,20,.75);z-index:9999;display:flex;align-items:center;justify-content:center;animation:lvlup-bg 3.2s ease forwards;pointer-events:none;isolation:isolate}
 .lvlup-card{background:#fff;border-radius:24px;padding:40px 36px;text-align:center;max-width:320px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:lvlup-card 3.2s ease forwards;position:relative;isolation:isolate;will-change:transform,opacity}
-.lvlup-emoji{font-size:64px;line-height:1;margin:18px 0 10px;display:block}
+.lvlup-emblem{margin:18px auto 10px}
 .lvlup-label{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--green2);margin-bottom:6px}
 .lvlup-title{font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:600;color:var(--green);letter-spacing:0;margin-bottom:4px}
 .lvlup-sub{font-size:13px;color:var(--text2);margin-top:4px}
@@ -840,7 +853,7 @@ function doGet(e) {
 <div class="section app-view active" data-view="home">
   <div class="lvl-card" id="lvl-card">
     <div class="lvl-left">
-      <div class="lvl-badge" id="lvl-badge">1</div>
+      <div class="rank-emblem lvl-badge" id="lvl-badge" aria-hidden="true"></div>
       <div class="lvl-info">
         <div class="lvl-title" id="lvl-title">Новичок</div>
         <div class="lvl-coef" id="lvl-coef">На 0.00% лучше</div>
@@ -2606,9 +2619,8 @@ function openQuickModal(key) {
 
 function openLevelsModal() {
   const coef = calcCoefficient();
-  const {cur: curLvl} = getCurrentRank(coef);
+  const {cur} = getCurrentRank(coef);
 
-  // Group ranks by rank number
   const rankGroups = {};
   RANKS.forEach(r => {
     if (!rankGroups[r.rank]) rankGroups[r.rank] = [];
@@ -2617,29 +2629,24 @@ function openLevelsModal() {
 
   document.getElementById('levels-list').innerHTML = Object.values(rankGroups).map(group => {
     const r = group[0];
-    const reached1 = coef >= group[0].coefNeeded;
-    const reached2 = group[1] && coef >= group[1].coefNeeded;
-    const reached3 = group[2] && coef >= group[2].coefNeeded;
-    const isCurRank = group.some(g => coef >= g.coefNeeded) && 
-      (group === Object.values(rankGroups)[Object.values(rankGroups).length-1] || 
-       !Object.values(rankGroups).find(ng => ng[0].rank > r.rank && coef >= ng[0].coefNeeded));
-    const curStars = reached3 ? 3 : reached2 ? 2 : reached1 ? 1 : 0;
+    const earnedStars = group.filter(level => coef >= level.coefNeeded).length;
+    const isCurrent = r.rank === cur.rank && earnedStars > 0;
 
-    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);opacity:${reached1?1:0.35}">
-      <div style="width:40px;height:40px;border-radius:12px;background:${reached1?'var(--green)':'var(--border)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${r.emoji}</div>
+    return `<div class="rank-row${isCurrent ? ' rank-row-current' : ''}"${isCurrent ? ' aria-current="true"' : ''}>
+      <div class="rank-emblem" aria-hidden="true">${rankEmblem(r)}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px">
+        <div class="rank-row-title">
           ${r.title}
-          ${isCurRank && reached1 ? '<span style="font-size:9px;font-weight:600;background:var(--green);color:#fff;padding:2px 7px;border-radius:99px">ТЕКУЩИЙ</span>' : ''}
+          ${isCurrent ? '<span class="rank-current-label">ТЕКУЩИЙ</span>' : ''}
         </div>
-        <div style="font-size:13px;color:#f5a623;letter-spacing:1px;margin-top:2px">
-          ${[1,2,3].map(s => `<span style="opacity:${coef >= group[s-1]?.coefNeeded ? 1 : 0.3}">★</span>`).join('')}
+        <div class="rank-row-stars" aria-label="Звёзды: ${earnedStars} из ${group.length}">
+          ${group.map(level => `<span aria-hidden="true"${coef >= level.coefNeeded ? ' class="rank-star-earned"' : ''}>★</span>`).join('')}
         </div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">
-          ×${group[0].coefNeeded} / ×${group[1]?.coefNeeded} / ×${group[2]?.coefNeeded}
+        <div class="rank-row-thresholds">
+          ${group.map((level, i) => `<span>${i ? '/ ' : ''}×${level.coefNeeded}</span>`).join('')}
         </div>
       </div>
-      <div style="font-size:11px;color:var(--green2);font-weight:600">${reached3?'✓✓✓':reached2?'✓✓':reached1?'✓':''}</div>
+      <div class="rank-row-checks" aria-hidden="true">${'✓'.repeat(earnedStars)}</div>
     </div>`;
   }).join('');
 
@@ -2727,13 +2734,35 @@ const RANKS = [
   {rank:12, stars:1, title:'Апекс',      emoji:'🔱',  coefNeeded:1000},
   {rank:12, stars:2, title:'Апекс',      emoji:'🔱',  coefNeeded:1450},
   {rank:12, stars:3, title:'Апекс',      emoji:'🔱',  coefNeeded:2120},
-  {rank:13, stars:1, title:'Архитектор', emoji:'🏛️',  coefNeeded:3230},
-  {rank:13, stars:2, title:'Архитектор', emoji:'🏛️',  coefNeeded:4860},
-  {rank:13, stars:3, title:'Архитектор', emoji:'🏛️',  coefNeeded:7390},
+  {rank:13, stars:1, title:'Архонт',     emoji:'🏛️',  coefNeeded:3230},
+  {rank:13, stars:2, title:'Архонт',     emoji:'🏛️',  coefNeeded:4860},
+  {rank:13, stars:3, title:'Архонт',     emoji:'🏛️',  coefNeeded:7390},
   {rank:14, stars:1, title:'Абсолют',    emoji:'⚡',  coefNeeded:11000},
   {rank:14, stars:2, title:'Абсолют',    emoji:'⚡',  coefNeeded:16500},
   {rank:14, stars:3, title:'Абсолют',    emoji:'⚡',  coefNeeded:25000},
 ];
+
+const RANK_EMBLEMS = [
+  '01-recruit.png',
+  '02-practitioner.png',
+  '03-fighter.png',
+  '04-athlete.png',
+  '05-warrior.png',
+  '06-gladiator.png',
+  '07-champion.png',
+  '08-elite.png',
+  '09-titan.png',
+  '10-legend.png',
+  '11-myth.png',
+  '12-apex.png',
+  '13-archon.png',
+  '14-absolute.png',
+];
+
+function rankEmblem(rank) {
+  return `<img src="./assets/ranks/${RANK_EMBLEMS[rank.rank - 1]}" alt=""
+    onerror="this.nextElementSibling.hidden = false; this.remove()"><span hidden>${rank.emoji}</span>`;
+}
 
 // Keep LEVELS as alias for compatibility
 const LEVELS = RANKS.map((r,i) => ({
@@ -3022,10 +3051,12 @@ function renderLevel() {
   const card = document.getElementById('lvl-card');
   if(card) { card.style.background = rc.bg; card.style.borderColor = rc.accent + '66'; }
   const badge = document.getElementById('lvl-badge');
-  badge.textContent = isNegativeProgress ? '🤡' : cur.emoji;
-  badge.style.background = isNegativeProgress ? '#fff' : 'linear-gradient(135deg,' + rc.accent + ',' + rc.text + ')';
-  badge.style.boxShadow = isNegativeProgress ? '0 2px 8px rgba(224,92,92,.18)' : '';
-  badge.style.fontSize = '22px';
+  badge.classList.toggle('lvl-badge-negative', isNegativeProgress);
+  const badgeKey = isNegativeProgress ? 'negative' : String(cur.rank);
+  if (badge.dataset.rank !== badgeKey) {
+    badge.innerHTML = isNegativeProgress ? '🤡' : rankEmblem(cur);
+    badge.dataset.rank = badgeKey;
+  }
   const titleEl = document.getElementById('lvl-title');
   const displayStars = isNegativeProgress ? 3 : cur.stars;
   titleEl.innerHTML = (isNegativeProgress ? 'Бездарь' : cur.title) +
@@ -3097,7 +3128,7 @@ function showLevelUpAnimation(rank) {
       ${confetti}
       ${stars}
       <div class="lvlup-label">Новый Ранг!</div>
-      <div class="lvlup-emoji">${rank.emoji}</div>
+      <div class="rank-emblem lvlup-emblem" aria-hidden="true">${rankEmblem(rank)}</div>
       <div class="lvlup-rank-stars">${rankStars}</div>
       <div class="lvlup-title">${rank.title}</div>
     </div>`;
@@ -3960,7 +3991,7 @@ setTimeout(initLeafletMap, 400);
       <h2 style="margin:0;font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:var(--green)">Все уровни</h2>
       <button class="hm-del" style="width:32px;height:32px;font-size:16px" onclick="document.getElementById('levels-modal').style.display='none'">✕</button>
     </div>
-    <div id="levels-list" style="overflow-y:auto;padding:0 24px 24px;flex:1"></div>
+    <div id="levels-list"></div>
   </div>
 </div>
 </body>
