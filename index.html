@@ -367,6 +367,33 @@ body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);max-w
 .cperiod.active{background:#3d6bce;color:#fff;border-color:#3d6bce}
 .chart-wrap{width:100%;height:120px}
 .chart-wrap svg{width:100%;height:100%;overflow:visible}
+.progress-overview{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px 12px;margin:10px 0 4px}
+.progress-legend{display:flex;gap:4px 10px;flex-wrap:wrap;font-size:11px;color:var(--text2)}
+.progress-legend > span{display:inline-flex;gap:4px;align-items:center}
+.progress-legend i{width:14px;border-top:2px solid #1a4731}
+.progress-legend .progress-legend-baseline{border-top:1px dashed #969696}
+.progress-average{display:grid;justify-items:end;gap:2px;margin-left:auto;font-size:11px;color:var(--text2)}
+.progress-average strong{font-size:18px;color:#D4A64C;line-height:1.1}
+.progress-positive{color:#267451}
+.progress-negative{color:var(--bad)}
+.progress-plot{touch-action:pan-y pinch-zoom;cursor:crosshair}
+.progress-plot svg{display:block}
+.progress-plot svg text{font:9px Inter,sans-serif;fill:var(--text2)}
+.progress-period-summary{margin-top:4px;text-align:center;font-size:12px;font-weight:600}
+.progress-daily-title{border-top:1px solid var(--border);margin:12px 0 2px;padding-top:8px;font-size:13px;font-weight:600}
+.progress-actual-line,.progress-baseline-line{fill:none;stroke-width:1.5;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.progress-actual-line{stroke:#1a4731;stroke-linecap:round}
+.progress-penalty-line{stroke:#e05c5c}
+.progress-baseline-line{stroke:#969696;stroke-width:1;stroke-dasharray:4 3}
+.progress-actual-marker{fill:#328261;stroke:var(--surface)}
+.progress-baseline-marker{fill:#969696;stroke:var(--surface)}
+.progress-chart-selection line{stroke:#969696;stroke-width:1;stroke-dasharray:2 3}
+.progress-bar{fill:#60b994}
+.progress-bar-negative{fill:var(--bad)}
+.progress-tooltip{position:fixed;z-index:20;pointer-events:none;width:max-content;max-width:min(240px, calc(100vw - 16px));background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px #1a1f3a26;padding:8px 10px;color:var(--text);font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+.progress-tooltip-row{display:flex;justify-content:space-between;gap:8px}
+.progress-tooltip-row b{flex-shrink:0}
+.progress-tooltip small{display:block;margin-top:3px;color:var(--text2)}
 .chart-empty{text-align:center;padding:36px 0;color:var(--text3);font-size:12px;font-weight:400;letter-spacing:.2px}
 .chart-stats{display:flex;justify-content:space-around;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);gap:4px}
 .cstat{text-align:center}
@@ -892,8 +919,21 @@ function doGet(e) {
       </div>
       <button class="progress-table-open" onclick="openProgressTableModal()" title="Таблица прогресса">≡</button>
     </div>
-    <div class="chart-wrap" id="coef-chart-wrap"></div>
-    <div id="coef-chart-stats" style="display:none;font-size:12px;font-weight:600;color:var(--green2);margin-top:10px;text-align:center" id="coef-chart-stats"></div>
+    <div class="progress-overview">
+      <div class="progress-legend">
+        <span><i></i>Факт</span>
+        <span><i class="progress-legend-baseline"></i>Baseline <span id="progress-baseline-rate"></span></span>
+      </div>
+      <div class="progress-average">
+        <span>Average / день</span>
+        <strong id="progress-average-value">—</strong>
+        <span id="progress-average-delta" class="progress-average-delta"></span>
+      </div>
+    </div>
+    <div class="chart-wrap progress-plot" id="coef-chart-wrap" tabindex="0" aria-label="Накопленный прогресс. Стрелки выбирают день."></div>
+    <div id="coef-chart-stats" class="progress-period-summary" hidden></div>
+    <h3 class="progress-daily-title">Ежедневный прогресс</h3>
+    <div class="chart-wrap progress-plot" id="daily-progress-chart" tabindex="0" aria-label="Ежедневный прогресс. Стрелки выбирают день."></div>
   </div>
 </div>
 
@@ -2087,14 +2127,7 @@ function setCoefPeriod(p) {
     const bp = t === '1 нед' ? -1 : t === '1 мес' ? 1 : b.id === 'coef-year-btn' ? 3 : 0;
     b.classList.toggle('active', bp === p);
   });
-  // Show loading state then render
-  const wrap = document.getElementById('coef-chart-wrap');
-  if(wrap) wrap.innerHTML = '<div class="chart-empty">Загрузка...</div>';
-  setTimeout(() => {
-    try {
-      renderCoefChart();
-    } catch(e) { console.error(e); }
-  }, 50);
+  renderCoefChart();
 }
 
 function calcCoefUpTo(untilDate) {
@@ -2191,10 +2224,6 @@ function getDateRange(start, end) {
   return dates;
 }
 
-function getFirstProgressDateInRange(start, end) {
-  return getDateRange(start, end).find(d => Math.abs(calcDayPct(d)) > 0.000001) || null;
-}
-
 function getActivityDatesInRange(start, end) {
   return [...new Set([
     ...steps.map(d => d.date),
@@ -2259,158 +2288,275 @@ function renderProgressTable() {
   `;
 }
 
-function renderCoefChart() {
-  const yearBtn = document.getElementById('coef-year-btn');
-  if (yearBtn) yearBtn.textContent = new Date().getFullYear();
-  const wrap = document.getElementById('coef-chart-wrap');
-  const statsEl = document.getElementById('coef-chart-stats');
-  if (!wrap) return;
+const BASELINE_DAILY_PCT = 0.45;
+const DAY_MS = 86400000;
+const progressNumber = new Intl.NumberFormat('ru-RU', {
+  minimumFractionDigits: 2, maximumFractionDigits: 2
+});
+const progressSigned = new Intl.NumberFormat('ru-RU', {
+  minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'exceptZero'
+});
 
-  const allDates = getAllCalendarDates();
-  if (!allDates.length) {
-    wrap.innerHTML = '<div class="chart-empty">Отмечай привычки — появится график</div>';
-    statsEl.style.display = 'none';
-    return;
-  }
+function progressElapsedDays(date) {
+  // The app supplies local YYYY-MM-DD dates. UTC subtraction counts calendar days across DST.
+  return (Date.parse(date) - Date.parse(TRACKER_START_DATE)) / DAY_MS;
+}
 
-  // Filter by period
-  let filtered = allDates;
-  const now = new Date();
-  const todayStr = td();
-  if (coefChartPeriod === -1) {
-    // Текущая календарная неделя: с понедельника до сегодня (локальное время)
-    const day = now.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    const mon = new Date(now);
-    mon.setDate(now.getDate() + diff);
-    const monStr = mon.getFullYear() + '-' + String(mon.getMonth()+1).padStart(2,'0') + '-' + String(mon.getDate()).padStart(2,'0');
-    filtered = getDateRange(monStr, todayStr);
-  } else if (coefChartPeriod === 1) {
-    // Текущий месяц: с первого ненулевого дневного прогресса до сегодня
-    const monthStart = localDateStr(new Date(now.getFullYear(), now.getMonth(), 1));
-    const monthProgressStart = getFirstProgressDateInRange(monthStart, todayStr);
-    filtered = monthProgressStart ? getDateRange(monthProgressStart, todayStr) : [];
-  } else if (coefChartPeriod === 3) {
-    // Текущий год: с первого ненулевого дневного прогресса до сегодня
-    const yearStart = localDateStr(new Date(now.getFullYear(), 0, 1));
-    const yearProgressStart = getFirstProgressDateInRange(yearStart, todayStr);
-    filtered = yearProgressStart ? getDateRange(yearProgressStart, todayStr) : [];
-  }
-  if (!filtered.length) {
-    wrap.innerHTML = '<div class="chart-empty">Нет данных за этот период</div>';
-    statsEl.style.display = 'none';
-    return;
-  }
+function progressBaseline(date) {
+  return 100 * Math.pow(1 + BASELINE_DAILY_PCT / 100, progressElapsedDays(date));
+}
 
-  // Keep one baseline point for growth calculation, but don't label it on the axis.
-  const baselineDate = (() => {
-    const d = new Date(filtered[0] + 'T12:00:00');
-    d.setDate(d.getDate() - 1);
-    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  })();
+function progressAverage(coef, elapsedDays) {
+  return elapsedDays > 0 && Number.isFinite(coef) && coef >= 0
+    ? (Math.pow(coef, 1 / elapsedDays) - 1) * 100
+    : null;
+}
 
-  // Prewarm cache for all filtered dates at once
-  filtered.forEach(d => { if (_dayPctCache[d] === undefined) calcDayPct(d); });
+function progressChangeClass(value) {
+  // Match the sign and color to the precision shown in the UI.
+  return Math.abs(value) < 0.005 ? '' : value > 0 ? ' progress-positive' : ' progress-negative';
+}
 
-  const step = Math.max(1, Math.floor(filtered.length / 20));
-  const points = [{ date: baselineDate, coef: 1.0 }];
-  const useFrozenCoef = shouldUseFrozenCoefForPeriod(filtered);
-  const frozenDatesCount = useFrozenCoef ? filtered.filter(d => d < habitsChangedAt).length : 0;
-  let runCoef = 1.0;
-  filtered.forEach((d, i) => {
-    if (useFrozenCoef && d < habitsChangedAt) {
-      const part = frozenDatesCount ? (i + 1) / frozenDatesCount : 1;
-      runCoef = 1 + (frozenCoef - 1) * part;
-    } else {
-      if (useFrozenCoef && filtered[i - 1] < habitsChangedAt) runCoef = frozenCoef;
-      runCoef *= (1 + (_dayPctCache[d] || 0) * 0.01);
-    }
-    if (i % step === 0 || i === filtered.length - 1) {
-      points.push({ date: d, coef: runCoef });
-    }
-  });
+function renderProgressAverage(coef, today) {
+  document.getElementById('progress-baseline-rate').textContent =
+    progressNumber.format(BASELINE_DAILY_PCT) + '%';
+  const average = progressAverage(coef, progressElapsedDays(today));
+  document.getElementById('progress-average-value').textContent =
+    average === null ? '—' : progressSigned.format(average) + '%';
+  const delta = document.getElementById('progress-average-delta');
+  const difference = average === null ? 0 : average - BASELINE_DAILY_PCT;
+  delta.className = 'progress-average-delta' + progressChangeClass(difference);
+  delta.textContent = average === null ? '' : progressSigned.format(difference) + ' п.п. к Baseline';
+}
 
-  if (points.length < 2) {
-    wrap.innerHTML = '<div class="chart-empty">Нужно больше данных</div>';
-    statsEl.style.display = 'none';
-    return;
-  }
+function getProgressChartDates(today) {
+  let start = TRACKER_START_DATE;
+  if (coefChartPeriod === -1) start = getWeekMonday(today);
+  if (coefChartPeriod === 1) start = today.slice(0, 7) + '-01';
+  if (coefChartPeriod === 3) start = today.slice(0, 4) + '-01-01';
+  start = start < TRACKER_START_DATE ? TRACKER_START_DATE : start;
+  const count = (Date.parse(today) - Date.parse(start)) / DAY_MS + 1;
+  return Array.from({length: Math.max(0, count)}, (_, i) =>
+    new Date(Date.parse(start) + i * DAY_MS).toISOString().slice(0, 10));
+}
 
-  const W = wrap.clientWidth || 380, H = 120;
-  const pad = { t: 16, r: 12, b: 24, l: 40 };
-  const vals = points.map(p => p.coef);
-  const minV = Math.min(...vals), maxV = Math.max(...vals), range = maxV - minV || 0.001;
-  // Date-proportional x axis
-  const t0 = new Date(points[0].date).getTime();
-  const t1 = new Date(points[points.length-1].date).getTime();
-  const tRange = t1 - t0 || 1;
-  const xS = d => pad.l + ((new Date(d).getTime() - t0) / tRange) * (W - pad.l - pad.r);
-  const yS = v => pad.t + (1 - (v - minV) / range) * (H - pad.t - pad.b);
-  const pts = points.map(p => ({ x: xS(p.date), y: yS(p.coef) }));
-  const area = 'M' + pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L') + ` L${pts[pts.length-1].x.toFixed(1)},${H-pad.b} L${pts[0].x.toFixed(1)},${H-pad.b} Z`;
-  const yTicks = [minV, (minV+maxV)/2, maxV].map(v => {
-    const pct = (v-1)*100;
-    const label = pct % 1 === 0 ? Math.round(pct)+'%' : pct.toFixed(1)+'%';
-    return { v: label, y: yS(v) };
-  });
-  // Max 4 labels. The first point is a hidden baseline, so labels start from real dates.
-  const maxTicks = 4;
-  const firstRealPoint = points.length > 1 ? 1 : 0;
-  const tickIndices = new Set(points.length <= 3
-    ? [points.length - 1]
-    : [firstRealPoint, points.length - 1]);
-  if (points.length > 5) {
-    const tickSpan = points.length - 1 - firstRealPoint;
-    const labelStep = Math.max(1, Math.floor(tickSpan / (maxTicks - 1)));
-    for (let i = firstRealPoint + labelStep; i < points.length - 1; i += labelStep) tickIndices.add(i);
-  }
-  const xTicks = [...tickIndices].sort((a,b)=>a-b).map(i => ({
-    d: points[i].date.slice(5), x: xS(points[i].date)
-  }));
+function getDailyChartBreakdown(date) {
+  if (alcohol.includes(date)) return [['Штраф за алкоголь', -alcoholPenalty]];
+  const totalWeight = habits.reduce((sum, habit) => sum + habit.weight, 0);
+  if (!totalWeight) return [];
+  // calcDayPct credits only the first workout habit and distributes it over the week.
+  const workoutHabit = habits.find(habit => habit.type === 'workout');
+  return habits.filter(habit => habit.type !== 'workout' || habit === workoutHabit)
+    .map(habit => [habit.name, getHabitContributionValue(habit, date) * (habit.weight / totalWeight)])
+    .filter(([, value]) => value !== 0);
+}
 
-  // Build colored segments: red for alcohol days, green otherwise
-  const segments = [];
-  for (let i = 0; i < pts.length - 1; i++) {
-    const isAlc = alcohol.includes(points[i+1].date);
-    const color = isAlc ? '#e05c5c' : '#1a4731';
-    segments.push(`<line x1="${pts[i].x.toFixed(1)}" y1="${pts[i].y.toFixed(1)}" x2="${pts[i+1].x.toFixed(1)}" y2="${pts[i+1].y.toFixed(1)}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`);
-  }
+function progressTooltipHeading(date) {
+  return '<strong>' + formatProgressDate(date) + '</strong>' +
+    '<div>День проекта: ' + (progressElapsedDays(date) + 1) + '</div>';
+}
 
-  wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
-    <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#3d6bce" stop-opacity=".12"/>
-      <stop offset="100%" stop-color="#1a4731" stop-opacity="0"/>
+function progressTooltipLine(label, value, style = '') {
+  return '<div class="progress-tooltip-row' + style + '"><span>' + escapeHtml(label) +
+    '</span><b>' + value + '</b></div>';
+}
+
+function renderProgressPlot(wrap, points, daily = false) {
+  const W = wrap.clientWidth || 350, H = 120;
+  const pad = {l: 42, r: 14, t: 14, b: 24};
+  const plotWidth = W - pad.l - pad.r;
+  const dx = plotWidth / Math.max(1, points.length - 1);
+  const x = i => points.length === 1 ? pad.l + plotWidth / 2 : pad.l + i * dx;
+  const values = daily ? [0, ...points.map(p => p.actual)] :
+    points.flatMap(p => p.actual === null ? [p.baseline] : [p.actual, p.baseline]);
+  let min = Math.min(...values), max = Math.max(...values);
+  if (min === max) { min -= 0.1; max += 0.1; }
+  const y = v => pad.t + (max - v) / (max - min) * (H - pad.t - pad.b);
+  const ticks = [min, (min + max) / 2, max];
+  const axisPct = new Intl.NumberFormat('ru-RU', {maximumFractionDigits: daily ? 2 : 1});
+  const dateTicks = [...new Set([0, Math.round((points.length - 1) / 3),
+    Math.round((points.length - 1) * 2 / 3), points.length - 1])];
+  const chartPath = key => points.map((p, i) => p[key] === null ? '' :
+    (i && points[i - 1][key] !== null ? 'L' : 'M') + x(i) + ',' + y(p[key])).join(' ');
+  const startActual = points.findIndex(p => p.actual !== null);
+  const actualPath = daily ? '' : chartPath('actual');
+  const last = points.at(-1);
+  const area = startActual < 0 || daily ? '' :
+    actualPath + ' L' + x(points.length - 1) + ',' + (H - pad.b) +
+    ' L' + x(startActual) + ',' + (H - pad.b) + ' Z';
+  const barWidth = Math.min(16, dx * 0.72);
+  const series = daily ? points.map((p, i) => {
+    const zero = y(0), point = y(p.actual);
+    return `<rect x="${x(i)-barWidth/2}" y="${Math.min(zero, point)}" width="${barWidth}" height="${Math.max(1, Math.abs(point-zero))}" class="${p.actual < 0 ? 'progress-bar-negative' : 'progress-bar'}"/>`;
+  }).join('') : `
+    <defs><linearGradient id="progress-chart-fill" x2="0" y2="1">
+      <stop stop-color="#60b994" stop-opacity=".18"/><stop offset="100%" stop-color="#60b994" stop-opacity="0"/>
     </linearGradient></defs>
-    ${yTicks.map(t => `<line x1="${pad.l}" y1="${t.y.toFixed(1)}" x2="${W-pad.r}" y2="${t.y.toFixed(1)}" stroke="#eee" stroke-width="1"/>`).join('')}
-    <path d="${area}" fill="url(#cg)"/>
-    ${segments.join('')}
-    ${yTicks.map(t => `<text x="${pad.l-4}" y="${(t.y+3.5).toFixed(1)}" text-anchor="end" font-size="8" fill="#b0b0a8" font-family="Inter,sans-serif" font-weight="500">${t.v}</text>`).join('')}
-    ${xTicks.map(t => `<text x="${t.x.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="8" fill="#c8c8c0" font-family="Inter,sans-serif" font-weight="500">${t.d}</text>`).join('')}
-    <circle cx="${pts[pts.length-1].x.toFixed(1)}" cy="${pts[pts.length-1].y.toFixed(1)}" r="3" fill="#3d6bce" stroke="#fff" stroke-width="1.5"/>
-  </svg>`;
+    <path d="${area}" fill="url(#progress-chart-fill)"/>
+    <path d="${chartPath('baseline')}" class="progress-baseline-line"/>
+    <path d="${actualPath}" class="progress-actual-line"/>
+    ${points.map((p, i) => i && p.actual !== null && points[i - 1].actual !== null && alcohol.includes(p.date)
+      ? `<line x1="${x(i-1)}" y1="${y(points[i-1].actual)}" x2="${x(i)}" y2="${y(p.actual)}" class="progress-actual-line progress-penalty-line"/>` : '').join('')}
+    ${points.length === 1 ? `<circle cx="${x(0)}" cy="${y(last.baseline)}" r="2.5" class="progress-baseline-marker"/>` : ''}
+    ${last.actual === null ? '' : `<circle cx="${x(points.length-1)}" cy="${y(last.actual)}" r="3" class="progress-actual-marker"/>`}`;
+  wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    ${ticks.map(v => `<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/><text x="${pad.l-4}" y="${y(v)+3}" text-anchor="end">${axisPct.format(v)}%</text>`).join('')}
+    ${daily && min < 0 && max > 0 ? `<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--border)"/>` : ''}
+    ${series}
+    ${dateTicks.map(i => `<text x="${x(i)}" y="${H-6}" text-anchor="middle">${points[i].date.slice(5).split('-').reverse().join('.')}</text>`).join('')}
+    <g class="progress-chart-selection" style="display:none">
+      <line y1="${pad.t}" y2="${H-pad.b}"/>
+      ${daily ? '' : '<circle class="progress-baseline-marker" r="4"/>'}
+      <circle class="progress-actual-marker" r="4"/>
+    </g>
+  </svg><div class="progress-tooltip" role="tooltip" hidden></div>`;
 
-  const first = points[0], last = points[points.length-1];
-  // Для "всё время" — показываем (finalCoef - 1) × 100, как в блоке уровней
-  // Для периодов — показываем рост внутри периода относительно его начала
-  // Multiply daily factors for the period: (1+p1)*(1+p2)*... - 1
-  const improvePctRaw = coefChartPeriod === 0
-    ? (calcCoefficient() - 1) * 100
-    : calcPeriodPct(filtered, baselineDate);
-  const improvePct = improvePctRaw.toFixed(2);
-  const now2 = new Date();
-  // Month with capital letter
-  const monthNamesCap = ['Январе','Феврале','Марте','Апреле','Мае','Июне','Июле','Августе','Сентябре','Октябре','Ноябре','Декабре'];
-  const monthName = monthNamesCap[now2.getMonth()];
+  const tooltipText = p => {
+    const heading = progressTooltipHeading(p.date);
+    if (daily) {
+      const breakdown = getDailyChartBreakdown(p.date);
+      return heading + progressTooltipLine('Итог за день', progressSigned.format(p.actual) + '%', progressChangeClass(p.actual)) +
+        breakdown.map(([label, value]) => progressTooltipLine(label, progressSigned.format(value) + '%', progressChangeClass(value))).join('') +
+        (breakdown.length && habitsChangedAt && p.date < habitsChangedAt ? '<small>Разбивка по текущим настройкам</small>' : '');
+    }
+    const deviation = p.actual === null ? null : (p.actual / p.baseline - 1) * 100;
+    return heading + progressTooltipLine('Прогресс', p.actual === null ? '—' : progressNumber.format(p.actual) + '%') +
+      progressTooltipLine('Baseline', progressNumber.format(p.baseline) + '%') +
+      progressTooltipLine('Отклонение', deviation === null ? '—' : progressSigned.format(deviation) + '%', progressChangeClass(deviation)) +
+      (deviation === null ? '<small>Доступен только сохранённый итог на дату изменения настроек</small>' : '');
+  };
+  bindProgressPlot(wrap, points, x, y, W, H, tooltipText, daily);
+}
+
+function bindProgressPlot(wrap, points, x, y, width, height, tooltipText, daily) {
+  const tooltip = wrap.querySelector('.progress-tooltip');
+  const selection = wrap.querySelector('.progress-chart-selection');
+  const guide = selection.querySelector('line');
+  const actual = selection.querySelector('.progress-actual-marker');
+  const baseline = selection.querySelector('.progress-baseline-marker');
+  let selected = -1, pinned = false, touchId = null;
+  const close = () => {
+    pinned = false;
+    selected = -1;
+    tooltip.hidden = true;
+    selection.style.display = 'none';
+  };
+  wrap.closeProgressTooltip = close;
+  const show = index => {
+    if (selected === index) return;
+    selected = index;
+    const p = points[index], gx = x(index);
+    guide.setAttribute('x1', gx);
+    guide.setAttribute('x2', gx);
+    for (const [marker, value] of [[actual, p.actual], [baseline, p.baseline]]) {
+      if (!marker) continue;
+      marker.style.display = value === null ? 'none' : '';
+      if (value !== null) {
+        marker.setAttribute('cx', gx);
+        marker.setAttribute('cy', y(value));
+      }
+    }
+    selection.style.display = '';
+    tooltip.innerHTML = tooltipText(p);
+    tooltip.hidden = false;
+    const rect = wrap.querySelector('svg').getBoundingClientRect();
+    const gap = 8;
+    const screenW = document.documentElement.clientWidth;
+    const screenH = document.documentElement.clientHeight;
+    const pointX = rect.left + gx / width * rect.width;
+    const side = pointX + gap + tooltip.offsetWidth <= screenW - gap
+      ? pointX + gap : pointX - gap - tooltip.offsetWidth;
+    const pointYs = [p.actual, ...(daily ? [] : [p.baseline])].filter(v => v !== null)
+      .map(v => rect.top + y(v) / height * rect.height);
+    const above = Math.min(...pointYs) - tooltip.offsetHeight - gap;
+    const below = Math.max(...pointYs) + gap;
+    const top = above >= gap ? above : below;
+    tooltip.style.left = Math.max(gap, Math.min(side, screenW - tooltip.offsetWidth - gap)) + 'px';
+    tooltip.style.top = Math.max(gap, Math.min(top, screenH - tooltip.offsetHeight - gap)) + 'px';
+  };
+  const pick = e => {
+    const rect = wrap.querySelector('svg').getBoundingClientRect();
+    if (!rect.width) return;
+    const localX = (e.clientX - rect.left) / rect.width * width;
+    const idx = points.length === 1 ? 0
+      : Math.round((localX - x(0)) / (x(1) - x(0)));
+    show(Math.min(points.length - 1, Math.max(0, idx)));
+  };
+  wrap.onpointermove = e => {
+    if (e.pointerId === touchId || (e.pointerType === 'mouse' && !pinned)) pick(e);
+  };
+  wrap.onpointerleave = () => { if (!pinned && touchId === null) close(); };
+  wrap.onpointerdown = e => {
+    if (!e.isPrimary || e.button !== 0) return;
+    if (e.pointerType !== 'mouse') {
+      touchId = e.pointerId;
+      wrap.setPointerCapture(touchId);
+    }
+    pinned = true;
+    pick(e);
+  };
+  wrap.onpointerup = e => { if (e.pointerId === touchId) touchId = null; };
+  wrap.onpointercancel = e => {
+    if (e.pointerId === touchId) { touchId = null; close(); }
+  };
+  wrap.onkeydown = e => {
+    if (e.key === 'Escape') close();
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const next = selected < 0 ? 0 : selected + (e.key === 'ArrowLeft' ? -1 : 1);
+    pinned = true;
+    show(Math.min(points.length - 1, Math.max(0, next)));
+  };
+}
+
+function closeProgressTooltips(target) {
+  document.querySelectorAll('.progress-plot').forEach(plot => {
+    if (!target || !plot.contains(target)) plot.closeProgressTooltip?.();
+  });
+}
+
+document.addEventListener('pointerdown', e => closeProgressTooltips(e.target));
+document.addEventListener('scroll', () => closeProgressTooltips(), {capture: true, passive: true});
+window.addEventListener('resize', () => closeProgressTooltips());
+
+function renderCoefChart() {
+  const today = td();
+  const yearBtn = document.getElementById('coef-year-btn');
+  if (yearBtn) yearBtn.textContent = today.slice(0, 4);
+  const wrap = document.getElementById('coef-chart-wrap');
+  const dailyWrap = document.getElementById('daily-progress-chart');
+  const statsEl = document.getElementById('coef-chart-stats');
+  const currentCoef = calcCoefficient();
+  renderProgressAverage(currentCoef, today);
+  const dates = getProgressChartDates(today);
+  if (!dates.length) {
+    wrap.innerHTML = dailyWrap.innerHTML = '<div class="chart-empty">Проект ещё не начался</div>';
+    statsEl.hidden = true;
+    return;
+  }
+
+  if (_cumCoefCache[today] === undefined) buildCumCoefCache();
+  const cumulative = dates.map(date => ({
+    date,
+    actual: date === today ? currentCoef * 100
+      : habitsChangedAt && date < habitsChangedAt ? null
+      : (_cumCoefCache[date] ?? frozenCoef) * 100,
+    baseline: progressBaseline(date)
+  }));
+  renderProgressPlot(wrap, cumulative);
+  renderProgressPlot(dailyWrap, dates.map(date => ({date, actual: calcDayPct(date)})), true);
+
+  const improvePct = (coefChartPeriod === 0
+    ? (currentCoef - 1) * 100
+    : calcPeriodPct(dates)).toFixed(2);
   const periodLabel = coefChartPeriod === -1 ? 'на этой неделе'
-    : coefChartPeriod === 1 ? 'в ' + monthName
-    : coefChartPeriod === 3 ? 'в ' + now2.getFullYear() + ' году'
+    : coefChartPeriod === 1 ? 'за этот месяц'
+    : coefChartPeriod === 3 ? 'за ' + today.slice(0, 4) + ' год'
     : 'за всё время';
-  statsEl.style.display = 'block';
-  const isWorse = parseFloat(improvePct) < 0;
-  statsEl.textContent = (isWorse ? 'Хуже на ' + Math.abs(parseFloat(improvePct)).toFixed(2) : 'Лучше на ' + improvePct) + '% ' + periodLabel;
-  statsEl.style.color = isWorse ? '#e05c5c' : '#3d6bce';
-
-
+  statsEl.hidden = false;
+  statsEl.textContent = (Number(improvePct) < 0 ? 'Хуже на ' : 'Лучше на ') +
+    progressNumber.format(Math.abs(Number(improvePct))) + '% ' + periodLabel;
+  statsEl.className = 'progress-period-summary' + progressChangeClass(Number(improvePct));
 }
 
 function setPeriod(p){
