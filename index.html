@@ -376,7 +376,7 @@ body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);max-w
 .progress-average strong{font-size:18px;color:#D4A64C;line-height:1.1}
 .progress-positive{color:#267451}
 .progress-negative{color:var(--bad)}
-.progress-plot{touch-action:pan-y pinch-zoom;cursor:crosshair}
+.interactive-plot{touch-action:pan-y pinch-zoom;cursor:crosshair}
 .progress-plot svg{display:block}
 .progress-plot svg text{font:9px Inter,sans-serif;fill:var(--text2)}
 .progress-period-summary{margin-top:4px;text-align:center;font-size:12px;font-weight:600}
@@ -926,7 +926,7 @@ function doGet(e) {
         <strong id="progress-average-value">—</strong>
       </div>
     </div>
-    <div class="chart-wrap progress-plot" id="coef-chart-wrap" tabindex="0" aria-label="Накопленный прогресс. Стрелки выбирают день."></div>
+    <div class="chart-wrap interactive-plot progress-plot" id="coef-chart-wrap" tabindex="0" aria-label="Накопленный прогресс. Стрелки выбирают день."></div>
     <div id="coef-chart-stats" class="progress-period-summary" hidden></div>
   </div>
 </div>
@@ -1042,7 +1042,7 @@ function doGet(e) {
         <button class="cperiod weight-period" onclick="setPeriod(0)">Всё</button>
       </div>
     </div>
-    <div class="chart-wrap" id="chart-wrap"></div>
+    <div class="chart-wrap interactive-plot" id="chart-wrap" aria-label="График веса. Стрелки выбирают взвешивание."></div>
     <div class="chart-stats" id="chart-stats" style="display:none">
       <div class="cstat"><div class="cstat-val" id="cs-start">—</div><div class="cstat-lbl">Начало</div></div>
       <div class="cstat"><div class="cstat-val" id="cs-now">—</div><div class="cstat-lbl">Сейчас</div></div>
@@ -2401,10 +2401,11 @@ function renderProgressPlot(wrap, points) {
         progressChangeClass(p.deviation)) +
       (p.actual === null ? '<small>Нет фактического значения за эту дату или на начало периода</small>' : '');
   };
-  bindProgressPlot(wrap, points, x, y, W, H, tooltipText);
+  bindChartTooltip(wrap, points, x, y, tooltipText);
 }
 
-function bindProgressPlot(wrap, points, x, y, width, height, tooltipText) {
+function bindChartTooltip(wrap, points, x, y, tooltipText) {
+  const svg = wrap.querySelector('svg');
   const tooltip = wrap.querySelector('.progress-tooltip');
   const selection = wrap.querySelector('.progress-chart-selection');
   const guide = selection.querySelector('line');
@@ -2417,14 +2418,15 @@ function bindProgressPlot(wrap, points, x, y, width, height, tooltipText) {
     tooltip.hidden = true;
     selection.style.display = 'none';
   };
-  wrap.closeProgressTooltip = close;
+  wrap.closeChartTooltip = close;
   const show = index => {
     if (selected === index) return;
     selected = index;
     const p = points[index], gx = x(index);
     guide.setAttribute('x1', gx);
     guide.setAttribute('x2', gx);
-    for (const [marker, value] of [[actual, p.actual], [baseline, p.baseline]]) {
+    const markers = baseline ? [[actual, p.actual], [baseline, p.baseline]] : [[actual, p.actual]];
+    for (const [marker, value] of markers) {
       marker.style.display = value === null ? 'none' : '';
       if (value !== null) {
         marker.setAttribute('cx', gx);
@@ -2434,15 +2436,16 @@ function bindProgressPlot(wrap, points, x, y, width, height, tooltipText) {
     selection.style.display = '';
     tooltip.innerHTML = tooltipText(p);
     tooltip.hidden = false;
-    const rect = wrap.querySelector('svg').getBoundingClientRect();
+    const transform = svg.getScreenCTM();
+    if (!transform) return;
     const gap = 8;
     const screenW = document.documentElement.clientWidth;
     const screenH = document.documentElement.clientHeight;
-    const pointX = rect.left + gx / width * rect.width;
+    const pointX = transform.e + gx * transform.a;
     const side = pointX + gap + tooltip.offsetWidth <= screenW - gap
       ? pointX + gap : pointX - gap - tooltip.offsetWidth;
-    const pointYs = [p.actual, p.baseline].filter(v => v !== null)
-      .map(v => rect.top + y(v) / height * rect.height);
+    const pointYs = markers.filter(([, value]) => value !== null)
+      .map(([, value]) => transform.f + y(value) * transform.d);
     const above = Math.min(...pointYs) - tooltip.offsetHeight - gap;
     const below = Math.max(...pointYs) + gap;
     const top = above >= gap ? above : below;
@@ -2450,19 +2453,25 @@ function bindProgressPlot(wrap, points, x, y, width, height, tooltipText) {
     tooltip.style.top = Math.max(gap, Math.min(top, screenH - tooltip.offsetHeight - gap)) + 'px';
   };
   const pick = e => {
-    const rect = wrap.querySelector('svg').getBoundingClientRect();
-    if (!rect.width) return;
-    const localX = (e.clientX - rect.left) / rect.width * width;
-    const idx = points.length === 1 ? 0
-      : Math.round((localX - x(0)) / (x(1) - x(0)));
-    show(Math.min(points.length - 1, Math.max(0, idx)));
+    if (!svg.isConnected) return;
+    const transform = svg.getScreenCTM();
+    if (!transform?.a) return;
+    const localX = (e.clientX - transform.e) / transform.a;
+    // Find the two points bracketing the pointer on the horizontal axis.
+    let left = 0, right = points.length - 1;
+    while (right - left > 1) {
+      const mid = Math.floor((left + right) / 2);
+      if (x(mid) <= localX) left = mid;
+      else right = mid;
+    }
+    show(localX - x(left) < x(right) - localX ? left : right);
   };
   wrap.onpointermove = e => {
     if (e.pointerId === touchId || (e.pointerType === 'mouse' && !pinned)) pick(e);
   };
   wrap.onpointerleave = () => { if (!pinned && touchId === null) close(); };
   wrap.onpointerdown = e => {
-    if (!e.isPrimary || e.button !== 0) return;
+    if (!svg.isConnected || !e.isPrimary || e.button !== 0) return;
     if (e.pointerType !== 'mouse') {
       touchId = e.pointerId;
       wrap.setPointerCapture(touchId);
@@ -2475,6 +2484,7 @@ function bindProgressPlot(wrap, points, x, y, width, height, tooltipText) {
     if (e.pointerId === touchId) { touchId = null; close(); }
   };
   wrap.onkeydown = e => {
+    if (!svg.isConnected) return;
     if (e.key === 'Escape') close();
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
@@ -2484,15 +2494,15 @@ function bindProgressPlot(wrap, points, x, y, width, height, tooltipText) {
   };
 }
 
-function closeProgressTooltips(target) {
-  document.querySelectorAll('.progress-plot').forEach(plot => {
-    if (!target || !plot.contains(target)) plot.closeProgressTooltip?.();
+function closeChartTooltips(target) {
+  document.querySelectorAll('.interactive-plot').forEach(plot => {
+    if (!target || !plot.contains(target)) plot.closeChartTooltip?.();
   });
 }
 
-document.addEventListener('pointerdown', e => closeProgressTooltips(e.target));
-document.addEventListener('scroll', () => closeProgressTooltips(), {capture: true, passive: true});
-window.addEventListener('resize', () => closeProgressTooltips());
+document.addEventListener('pointerdown', e => closeChartTooltips(e.target));
+document.addEventListener('scroll', () => closeChartTooltips(), {capture: true, passive: true});
+window.addEventListener('resize', () => closeChartTooltips());
 
 function renderCoefChart() {
   const today = td();
@@ -2562,6 +2572,7 @@ function calcBMI(weightKg) {
 function renderChart(){
   const wrap=document.getElementById('chart-wrap');
   const statsEl=document.getElementById('chart-stats');
+  wrap.removeAttribute('tabindex');
   if(!meas.length){wrap.innerHTML='<div class="chart-empty">Добавь замеры веса — появится график</div>';statsEl.style.display='none';return;}
   const sorted=[...meas].sort((a,b)=>a.date.localeCompare(b.date));
   let filtered=sorted;
@@ -2595,7 +2606,28 @@ function renderChart(){
     ${yTicks.map(t=>`<text x="${pad.l-4}" y="${(t.y+3.5).toFixed(1)}" text-anchor="end" font-size="8" fill="#b0b0a8" font-family="Inter,sans-serif" font-weight="500">${t.v}</text>`).join('')}
     ${xTicks.map(t=>`<text x="${t.x.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="8" fill="#c8c8c0" font-family="Inter,sans-serif" font-weight="500">${t.d}</text>`).join('')}
     ${pts.map((p,i)=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${filtered.length>15?1.5:2.5}" fill="${i===pts.length-1?'#3d6bce':'#93c5fd'}" stroke="#fff" stroke-width="1.5"/>`).join('')}
-  </svg>`;
+    <g class="progress-chart-selection" style="display:none">
+      <line y1="${pad.t}" y2="${H-pad.b}"/>
+      <circle class="progress-actual-marker" r="4" style="fill:#3d6bce"/>
+    </g>
+  </svg><div class="progress-tooltip" role="tooltip" hidden></div>`;
+  wrap.tabIndex = 0;
+  const firstIndex = sorted.indexOf(filtered[0]);
+  const weightPoints = filtered.map((measurement, i) => {
+    const previous = sorted[firstIndex + i - 1];
+    return {
+      date: measurement.date,
+      actual: measurement.weight,
+      change: previous ? measurement.weight - previous.weight : null
+    };
+  });
+  const weightNumber = new Intl.NumberFormat('ru-RU', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+  const weightChange = new Intl.NumberFormat('ru-RU', {minimumFractionDigits: 1, maximumFractionDigits: 1, signDisplay: 'exceptZero'});
+  bindChartTooltip(wrap, weightPoints, i => pts[i].x, yS, point =>
+    '<strong>' + formatProgressDate(point.date) + '</strong>' +
+    progressTooltipLine('Вес', weightNumber.format(point.actual) + ' кг') +
+    progressTooltipLine('Изменение', point.change === null ? '—' :
+      weightChange.format(point.change).replace('-', '−') + ' кг'));
   const first=filtered[0],last2=filtered[filtered.length-1];
   const diff=(last2.weight-first.weight).toFixed(1);
   document.getElementById('cs-start').textContent=first.weight.toFixed(1)+' кг';
