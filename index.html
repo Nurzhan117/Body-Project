@@ -2395,10 +2395,14 @@ function renderProgressPlot(wrap, points) {
   const tooltipText = p => {
     const heading = progressTooltipHeading(p.date) +
       (p.opening ? '<div>До начислений первого дня</div>' : '');
+    const comparisonClass = progressChangeClass(p.deviation);
+    const comparisonLabel = p.deviation === null ? 'Сравнение с планом'
+      : !comparisonClass ? 'По плану'
+      : p.deviation > 0 ? 'Опережение плана' : 'Отставание от плана';
     return heading + progressTooltipLine('Прогресс', p.actual === null ? '—' : progressSigned.format(p.actual) + '%') +
       progressTooltipLine('Baseline', progressSigned.format(p.baseline) + '%') +
-      progressTooltipLine('Отклонение', p.deviation === null ? '—' : progressSigned.format(p.deviation) + '%',
-        progressChangeClass(p.deviation)) +
+      progressTooltipLine(comparisonLabel, p.deviation === null ? '—' : progressSigned.format(p.deviation) + '%',
+        comparisonClass) +
       (p.actual === null ? '<small>Нет фактического значения за эту дату или на начало периода</small>' : '');
   };
   bindChartTooltip(wrap, points, x, y, tooltipText);
