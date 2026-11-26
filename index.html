@@ -2449,7 +2449,7 @@ function renderProgressPlot(wrap, points) {
       : p.deviation > 0 ? 'Опережение плана' : 'Отставание от плана';
     return heading + progressTooltipLine('Прогресс', p.actual === null ? '—' : progressSigned.format(p.actual) + '%') +
       progressTooltipLine('Baseline', progressSigned.format(p.baseline) + '%') +
-      progressTooltipLine(comparisonLabel, p.deviation === null ? '—' : progressSigned.format(p.deviation) + '%',
+      progressTooltipLine(comparisonLabel, p.deviation === null ? '—' : progressSigned.format(p.deviation).replace('-', '−') + '%',
         comparisonClass) +
       (p.actual === null ? '<small>Нет фактического значения за эту дату или на начало периода</small>' : '');
   };
@@ -2587,8 +2587,7 @@ function renderCoefChart() {
     const actual = coefficient === null || firstActual === null || firstActual === 0
       ? null : (coefficient / firstActual - 1) * 100;
     const baseline = (progressBaseline(date) / firstBaseline - 1) * 100;
-    const deviation = actual === null ? null
-      : ((1 + actual / 100) / (1 + baseline / 100) - 1) * 100;
+    const deviation = actual === null ? null : actual - baseline;
     points.push({date, actual, baseline, deviation});
   }
   renderProgressPlot(wrap, points);
