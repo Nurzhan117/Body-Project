@@ -354,36 +354,32 @@ body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);max-w
 .cal-day{cursor:pointer;transition:opacity .15s}
 .cal-day:not(.other):hover{opacity:.75}
 .chart-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:18px;box-shadow:var(--shadow-soft)}
-.chart-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.chart-periods{display:flex;gap:4px}
-.progress-table-open{width:32px;height:23px;min-width:32px;min-height:23px;border-radius:99px;border:1px solid var(--border);background:var(--bg);font-family:Arial,'Inter',sans-serif;font-size:19px;font-weight:700;line-height:0;color:var(--text3);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;margin-left:8px;padding:0;-webkit-text-size-adjust:100%;text-size-adjust:100%;-webkit-appearance:none;appearance:none}
-.progress-table-open:hover{border-color:#3d6bce;color:#3d6bce;background:#f5f8ff}
-.cperiod{
-  padding:5px 12px;border-radius:99px;
-  border:1px solid var(--border);background:#fff;
-  font-family:'Inter',sans-serif;font-size:10px;font-weight:700;
-  letter-spacing:.5px;color:var(--text3);cursor:pointer;transition:all .15s
-}
-.cperiod.active{background:#3d6bce;color:#fff;border-color:#3d6bce}
-.chart-wrap{width:100%;height:120px}
-.chart-wrap svg{width:100%;height:100%;overflow:visible}
-.progress-overview{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px 12px;margin:10px 0 4px}
+.chart-top{--period-bg:#edf0f5;display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.chart-periods{display:flex;flex:1;min-width:0;padding:4px;background:var(--period-bg);border-radius:12px}
+.progress-table-open{flex:0 0 40px;width:40px;height:40px;border:0;border-radius:11px;background:var(--period-bg);font:700 22px/1 Arial,sans-serif;color:var(--text2);display:grid;place-items:center;cursor:pointer;padding:0}
+.progress-table-open:hover{color:var(--green)}
+.cperiod{flex:1 1 0;min-width:0;height:36px;padding:0;border:0;border-radius:8px;background:transparent;font:600 13px Inter,sans-serif;color:#657287;white-space:nowrap;cursor:pointer;transition:background-color .16s,color .16s}
+.cperiod.active{background:var(--green);color:#fff}
+.chart-wrap{width:100%;height:200px}
+.chart-wrap svg{display:block;width:100%;height:100%;overflow:visible}
+.chart-axis-label{font:11px Inter,sans-serif;fill:var(--text2)}
+.chart-grid-line{stroke:var(--border);stroke-width:1}
+.chart-grid-zero{stroke:#aab6c9}
+.progress-overview{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px;margin:10px 0 4px}
 .progress-legend{display:flex;gap:4px 10px;flex-wrap:wrap;font-size:11px;color:var(--text2)}
 .progress-legend > span{display:inline-flex;gap:4px;align-items:center}
 .progress-legend i{width:14px;border-top:2px solid #1a4731}
 .progress-legend .progress-legend-baseline{border-top:1px dashed #969696}
 .progress-average{display:grid;justify-items:end;gap:2px;margin-left:auto;font-size:11px;color:var(--text2)}
-.progress-average strong{font-size:18px;color:#D4A64C;line-height:1.1}
+.progress-average strong{font-size:20px;color:#D4A64C;line-height:1.1}
 .progress-positive{color:#267451}
 .progress-negative{color:var(--bad)}
 .interactive-plot{touch-action:pan-y pinch-zoom;cursor:crosshair}
-.progress-plot svg{display:block}
-.progress-plot svg text{font:9px Inter,sans-serif;fill:var(--text2)}
 .progress-period-summary{margin-top:4px;text-align:center;font-size:12px;font-weight:600}
-.progress-actual-line,.progress-baseline-line{fill:none;stroke-width:1.5;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.progress-actual-line,.progress-baseline-line{fill:none;stroke-width:2.2;stroke-linejoin:round;vector-effect:non-scaling-stroke}
 .progress-actual-line{stroke:#1a4731;stroke-linecap:round}
 .progress-penalty-line{stroke:#e05c5c}
-.progress-baseline-line{stroke:#969696;stroke-width:1;stroke-dasharray:4 3}
+.progress-baseline-line{stroke:#969696;stroke-width:1.5;stroke-dasharray:4 3}
 .progress-actual-marker{fill:#328261;stroke:var(--surface)}
 .progress-baseline-marker{fill:#969696;stroke:var(--surface)}
 .progress-chart-selection line{stroke:#969696;stroke-width:1;stroke-dasharray:2 3}
@@ -908,13 +904,13 @@ function doGet(e) {
   <div class="section-label">Мой прогресс</div>
   <div class="chart-card">
     <div class="chart-top">
-      <div class="chart-periods">
-        <button class="cperiod coef-period active" onclick="setCoefPeriod(-1)">1 нед</button>
-        <button class="cperiod coef-period" onclick="setCoefPeriod(1)">1 мес</button>
-        <button class="cperiod coef-period" id="coef-year-btn" onclick="setCoefPeriod(3)">2026</button>
-        <button class="cperiod coef-period" onclick="setCoefPeriod(0)">Всё</button>
+      <div class="chart-periods" role="group" aria-label="Период графика">
+        <button class="cperiod coef-period active" aria-pressed="true" onclick="setCoefPeriod(-1)">1 нед</button>
+        <button class="cperiod coef-period" aria-pressed="false" onclick="setCoefPeriod(1)">1 мес</button>
+        <button class="cperiod coef-period" aria-pressed="false" id="coef-year-btn" onclick="setCoefPeriod(3)">2026</button>
+        <button class="cperiod coef-period" aria-pressed="false" onclick="setCoefPeriod(0)">Всё</button>
       </div>
-      <button class="progress-table-open" onclick="openProgressTableModal()" title="Таблица прогресса">≡</button>
+      <button class="progress-table-open" onclick="openProgressTableModal()" title="Таблица прогресса" aria-label="Таблица прогресса">≡</button>
     </div>
     <div class="progress-overview">
       <div class="progress-legend">
@@ -1036,10 +1032,10 @@ function doGet(e) {
   <div class="section-label">Динамика веса</div>
   <div class="chart-card">
     <div class="chart-top">
-      <div class="chart-periods">
-        <button class="cperiod weight-period" onclick="setPeriod(1)">1 мес</button>
-        <button class="cperiod weight-period active" onclick="setPeriod(3)">3 мес</button>
-        <button class="cperiod weight-period" onclick="setPeriod(0)">Всё</button>
+      <div class="chart-periods" role="group" aria-label="Период графика">
+        <button class="cperiod weight-period" aria-pressed="false" onclick="setPeriod(1)">1 мес</button>
+        <button class="cperiod weight-period active" aria-pressed="true" onclick="setPeriod(3)">3 мес</button>
+        <button class="cperiod weight-period" aria-pressed="false" onclick="setPeriod(0)">Всё</button>
       </div>
     </div>
     <div class="chart-wrap interactive-plot" id="chart-wrap" aria-label="График веса. Стрелки выбирают взвешивание."></div>
@@ -2120,6 +2116,7 @@ function setCoefPeriod(p) {
     const t = b.textContent.trim();
     const bp = t === '1 нед' ? -1 : t === '1 мес' ? 1 : b.id === 'coef-year-btn' ? 3 : 0;
     b.classList.toggle('active', bp === p);
+    b.setAttribute('aria-pressed', String(bp === p));
   });
   renderCoefChart();
 }
@@ -2347,18 +2344,67 @@ function progressTooltipLine(label, value, style = '') {
     '</span><b>' + value + '</b></div>';
 }
 
+const CHART_HEIGHT = 200;
+
+function chartAxis(values, percent) {
+  let min = Math.min(...values), max = Math.max(...values);
+  if (min === max) {
+    const padding = percent ? 1 : 0.5;
+    min -= padding;
+    max += padding;
+  }
+
+  const targetStep = (max - min) / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(targetStep));
+  const steps = [1, 2, 2.5, 5, 10, 20].map(multiplier => multiplier * magnitude);
+  const step = steps.find(candidate => Math.ceil(max / candidate) - Math.floor(min / candidate) <= 4);
+  let low = Math.floor(min / step);
+  let high = Math.ceil(max / step);
+  // Pad short scales to four labels while keeping the plotting range on the same side of zero if possible.
+  while (high - low < 3) {
+    if (min >= 0 || (max > 0 && high * step - max < min - low * step)) high++;
+    else low--;
+  }
+  const digits = Math.max(0, Math.min(20, -Math.floor(Math.log10(step)) + 1));
+  const format = new Intl.NumberFormat('ru-RU', {
+    maximumFractionDigits: digits, signDisplay: percent ? 'exceptZero' : 'auto',
+    notation: Math.max(Math.abs(low * step), Math.abs(high * step)) >= 100000 ? 'compact' : 'standard'
+  });
+  const ticks = Array.from({length: high - low + 1}, (_, i) => {
+    const index = low + i;
+    const value = index === 0 ? 0 : index * step;
+    return {value, label: format.format(value) + (percent ? '%' : '')};
+  });
+  return {min: low * step, max: high * step, ticks};
+}
+
+function chartGrid(axis, pad, width, y, emphasizeZero = false) {
+  return axis.ticks.map(({value, label}) => {
+    const gridClass = value === 0 && emphasizeZero ? 'chart-grid-line chart-grid-zero' : 'chart-grid-line';
+    return `<line class="${gridClass}" x1="${pad.l}" x2="${width-pad.r}" y1="${y(value)}" y2="${y(value)}"/><text class="chart-axis-label" x="${pad.l-5}" y="${y(value)+4}" text-anchor="end">${label}</text>`;
+  }).join('');
+}
+
+function chartDateLabels(ticks, width, height) {
+  const dates = ticks.map(tick => ({...tick, x: Math.max(20, Math.min(width - 20, tick.x))}));
+  const last = dates.at(-1);
+  const labels = [dates[0]];
+  for (const date of dates.slice(1, -1)) {
+    if (date.x - labels.at(-1).x >= 38 && last.x - date.x >= 38) labels.push(date);
+  }
+  if (last.x - labels.at(-1).x >= 38) labels.push(last);
+  return labels.map(tick => `<text class="chart-axis-label" x="${tick.x.toFixed(1)}" y="${height-7}" text-anchor="middle">${tick.date}</text>`).join('');
+}
+
 function renderProgressPlot(wrap, points) {
-  const W = wrap.clientWidth || 350, H = 120;
-  const pad = {l: 42, r: 14, t: 14, b: 24};
+  const W = wrap.clientWidth || 350, H = CHART_HEIGHT;
+  const values = points.flatMap(p => p.actual === null ? [p.baseline] : [p.actual, p.baseline]);
+  const axis = chartAxis(values, true);
+  const pad = {l: Math.max(42, ...axis.ticks.map(t => t.label.length * 7 + 8)), r: 15, t: 14, b: 26};
   const plotWidth = W - pad.l - pad.r;
   const dx = plotWidth / Math.max(1, points.length - 1);
   const x = i => points.length === 1 ? pad.l + plotWidth / 2 : pad.l + i * dx;
-  const values = points.flatMap(p => p.actual === null ? [p.baseline] : [p.actual, p.baseline]);
-  let min = Math.min(...values), max = Math.max(...values);
-  if (min === max) { min -= 0.1; max += 0.1; }
-  const y = v => pad.t + (max - v) / (max - min) * (H - pad.t - pad.b);
-  const ticks = [min, min < 0 && max > 0 ? 0 : (min + max) / 2, max];
-  const axisPct = new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 2, signDisplay: 'exceptZero'});
+  const y = v => pad.t + (axis.max - v) / (axis.max - axis.min) * (H - pad.t - pad.b);
   const lastIndex = points.length - 1;
   const dateTicks = [...new Set([1, 1 + Math.round((lastIndex - 1) / 3),
     1 + Math.round((lastIndex - 1) * 2 / 3), lastIndex])];
@@ -2378,17 +2424,19 @@ function renderProgressPlot(wrap, points) {
     <path d="${actualPath}" class="progress-actual-line"/>
     ${points.map((p, i) => i && p.actual !== null && points[i - 1].actual !== null && alcohol.includes(p.date)
       ? `<line x1="${x(i-1)}" y1="${y(points[i-1].actual)}" x2="${x(i)}" y2="${y(p.actual)}" class="progress-actual-line progress-penalty-line"/>` : '').join('')}
-    ${points.length === 1 ? `<circle cx="${x(0)}" cy="${y(last.baseline)}" r="2.5" class="progress-baseline-marker"/>` : ''}
-    ${points.length > 1 && points[1].actual === null ? `<circle cx="${x(0)}" cy="${y(0)}" r="3" class="progress-actual-marker"/>` : ''}
-    ${last.actual === null ? '' : `<circle cx="${x(points.length-1)}" cy="${y(last.actual)}" r="3" class="progress-actual-marker"/>`}`;
-  wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-    ${ticks.map(v => `<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/><text x="${pad.l-4}" y="${y(v)+3}" text-anchor="end">${axisPct.format(v)}%</text>`).join('')}
+    ${points.length === 1 ? `<circle cx="${x(0)}" cy="${y(last.baseline)}" r="4" class="progress-baseline-marker"/>` : ''}
+    ${points.length > 1 && points[1].actual === null ? `<circle cx="${x(0)}" cy="${y(0)}" r="4" class="progress-actual-marker"/>` : ''}
+    ${last.actual === null ? '' : `<circle cx="${x(points.length-1)}" cy="${y(last.actual)}" r="4" class="progress-actual-marker"/>`}`;
+  wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
+    ${chartGrid(axis, pad, W, y, true)}
     ${series}
-    ${dateTicks.map(i => `<text x="${x(i)}" y="${H-6}" text-anchor="middle">${points[i].date.slice(5).split('-').reverse().join('.')}</text>`).join('')}
+    ${chartDateLabels(dateTicks.map(i => ({
+      date: points[i].date.slice(5).split('-').reverse().join('.'), x: x(i)
+    })), W, H)}
     <g class="progress-chart-selection" style="display:none">
       <line y1="${pad.t}" y2="${H-pad.b}"/>
-      <circle class="progress-baseline-marker" r="4"/>
-      <circle class="progress-actual-marker" r="4"/>
+      <circle class="progress-baseline-marker" r="5"/>
+      <circle class="progress-actual-marker" r="5"/>
     </g>
   </svg><div class="progress-tooltip" role="tooltip" hidden></div>`;
 
@@ -2563,6 +2611,7 @@ function setPeriod(p){
   document.querySelectorAll('.weight-period').forEach(b=>{
     const bp=b.textContent.trim()==='1 мес'?1:b.textContent.trim()==='3 мес'?3:0;
     b.classList.toggle('active',bp===p);
+    b.setAttribute('aria-pressed', String(bp === p));
   });
 
   renderChart();
@@ -2582,37 +2631,30 @@ function renderChart(){
   let filtered=sorted;
   if(chartPeriod>0){const cut=new Date();cut.setMonth(cut.getMonth()-chartPeriod);filtered=sorted.filter(m=>m.date>=cut.toISOString().slice(0,10));}
   if(!filtered.length){wrap.innerHTML='<div class="chart-empty">Нет данных за этот период</div>';statsEl.style.display='none';return;}
-  const W=wrap.clientWidth||380,H=120;
-  const pad={t:16,r:12,b:24,l:36};
-  const vals=filtered.map(m=>m.weight);
-  const minV=Math.min(...vals),maxV=Math.max(...vals),range=maxV-minV||1;
+  const W=wrap.clientWidth||380,H=CHART_HEIGHT;
+  const axis=chartAxis(filtered.map(m=>m.weight), false);
+  const pad={t:14,r:15,b:26,l:Math.max(36, ...axis.ticks.map(t => t.label.length * 7 + 8))};
   const wt0=new Date(filtered[0].date).getTime();
   const wt1=new Date(filtered[filtered.length-1].date).getTime();
   const wtRange=wt1-wt0||1;
   const xS=d=>pad.l+((new Date(d).getTime()-wt0)/wtRange)*(W-pad.l-pad.r);
-  const yS=v=>pad.t+(1-(v-minV)/range)*(H-pad.t-pad.b);
+  const yS=v=>pad.t+((axis.max-v)/(axis.max-axis.min))*(H-pad.t-pad.b);
   const pts=filtered.map(m=>({x:xS(m.date),y:yS(m.weight)}));
   const path='M'+pts.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L');
   const area=path+` L${pts[pts.length-1].x.toFixed(1)},${H-pad.b} L${pts[0].x.toFixed(1)},${H-pad.b} Z`;
-  const yTicks=[minV,(minV+maxV)/2,maxV].map(v=>({v:v.toFixed(1),y:yS(v)}));
-  const maxTicksW = 4;
-  const tickIdxW = new Set([0, filtered.length - 1]);
-  if (filtered.length > 2) {
-    const stepW = Math.max(1, Math.floor((filtered.length - 1) / (maxTicksW - 1)));
-    for (let i = stepW; i < filtered.length - 1; i += stepW) tickIdxW.add(i);
-  }
-  const xTicks=[...tickIdxW].sort((a,b)=>a-b).map(i=>({d:filtered[i].date.slice(5),x:xS(filtered[i].date)}));
+  const lastIndex = filtered.length - 1;
+  const tickIndices = [...new Set([0, Math.round(lastIndex / 3), Math.round(lastIndex * 2 / 3), lastIndex])];
+  const xTicks = tickIndices.map(i => ({date:filtered[i].date.slice(5), x:pts[i].x}));
   wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
     <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a4731" stop-opacity=".1"/><stop offset="100%" stop-color="#1a4731" stop-opacity="0"/></linearGradient></defs>
-    ${yTicks.map(t=>`<line x1="${pad.l}" y1="${t.y.toFixed(1)}" x2="${W-pad.r}" y2="${t.y.toFixed(1)}" stroke="#eee" stroke-width="1"/>`).join('')}
+    ${chartGrid(axis, pad, W, yS)}
     <path d="${area}" fill="url(#g)"/>
-    <path d="${path}" fill="none" stroke="#3d6bce" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
-    ${yTicks.map(t=>`<text x="${pad.l-4}" y="${(t.y+3.5).toFixed(1)}" text-anchor="end" font-size="8" fill="#b0b0a8" font-family="Inter,sans-serif" font-weight="500">${t.v}</text>`).join('')}
-    ${xTicks.map(t=>`<text x="${t.x.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="8" fill="#c8c8c0" font-family="Inter,sans-serif" font-weight="500">${t.d}</text>`).join('')}
-    ${pts.map((p,i)=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${filtered.length>15?1.5:2.5}" fill="${i===pts.length-1?'#3d6bce':'#93c5fd'}" stroke="#fff" stroke-width="1.5"/>`).join('')}
+    <path d="${path}" fill="none" stroke="#3d6bce" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${chartDateLabels(xTicks, W, H)}
+    ${pts.map((p,i)=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${i===lastIndex ? 4 : filtered.length>15 ? 1.5 : 2.5}" fill="${i===pts.length-1?'#3d6bce':'#93c5fd'}" stroke="#fff" stroke-width="1.5"/>`).join('')}
     <g class="progress-chart-selection" style="display:none">
       <line y1="${pad.t}" y2="${H-pad.b}"/>
-      <circle class="progress-actual-marker" r="4" style="fill:#3d6bce"/>
+      <circle class="progress-actual-marker" r="5" style="fill:#3d6bce"/>
     </g>
   </svg><div class="progress-tooltip" role="tooltip" hidden></div>`;
   wrap.tabIndex = 0;
@@ -2643,6 +2685,26 @@ function renderChart(){
   if (bmiEl) bmiEl.textContent = bmi ? bmi.toFixed(1) : '—';
   statsEl.style.display='flex';
 }
+
+function observeChartWidths() {
+  if (typeof ResizeObserver === 'undefined') return;
+  const charts = [
+    [document.getElementById('coef-chart-wrap'), renderCoefChart],
+    [document.getElementById('chart-wrap'), renderChart]
+  ];
+  const widths = new Map(charts.map(([chart]) => [chart, chart.clientWidth]));
+  const observer = new ResizeObserver(entries => {
+    for (const {target} of entries) {
+      const width = target.clientWidth;
+      if (width === widths.get(target)) continue;
+      widths.set(target, width);
+      if (width) charts.find(([chart]) => chart === target)[1]();
+    }
+  });
+  charts.forEach(([chart]) => observer.observe(chart));
+}
+
+observeChartWidths();
 
 let wCurPage = 0;
 let mCurPage = 0;
