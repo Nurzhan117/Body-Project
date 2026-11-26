@@ -127,14 +127,13 @@ body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);max-w
 .section-head{display:flex;align-items:center;justify-content:flex-end;gap:10px}
 .section-head .section-label{margin-bottom:0;min-width:0}
 .view-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;width:100%;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:15px;box-shadow:var(--shadow-soft)}
-.view-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;height:56px;padding:0 1px;border:0;border-radius:11px;background:transparent;color:var(--text2);font:600 11px/1.1 Inter,Arial,sans-serif;text-align:center;cursor:pointer;transition:background-color .18s,color .18s}
-.view-tab .nav-ico{width:20px;height:20px;flex:none;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.view-tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:48px;padding:0 1px;border:0;border-radius:10px;background:transparent;color:var(--text2);font:600 10px/1.1 Inter,Arial,sans-serif;text-align:center;cursor:pointer;transition:background-color .18s,color .18s}
+.view-tab .nav-ico{width:18px;height:18px;flex:none;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .view-tab .nav-text{max-width:100%;white-space:nowrap}
+.view-tab:not(.active) + .view-tab:not(.active)::before{content:"";position:absolute;inset-inline-start:-2.5px;top:50%;transform:translateY(-50%);width:1px;height:28px;background:#dfe4eb;pointer-events:none}
 .view-tab.active{background:#2870eb;color:#fff}
 .view-tab:focus-visible{outline:2px solid var(--green);outline-offset:1px}
-@media (max-width:410px){.view-tab{font-size:10px}}
 @media (max-width:374px){.view-tab{font-size:9px;letter-spacing:-.3px;padding-inline:0}}
-@media (max-width:345px){.view-tab .nav-ico{width:18px;height:18px}}
 .app-view{display:none}
 .app-view.active{display:block}
 .today-card{background:var(--surface);border-radius:16px;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow)}
