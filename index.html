@@ -380,7 +380,6 @@ body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);max-w
 .progress-plot svg{display:block}
 .progress-plot svg text{font:9px Inter,sans-serif;fill:var(--text2)}
 .progress-period-summary{margin-top:4px;text-align:center;font-size:12px;font-weight:600}
-.progress-daily-title{border-top:1px solid var(--border);margin:12px 0 2px;padding-top:8px;font-size:13px;font-weight:600}
 .progress-actual-line,.progress-baseline-line{fill:none;stroke-width:1.5;stroke-linejoin:round;vector-effect:non-scaling-stroke}
 .progress-actual-line{stroke:#1a4731;stroke-linecap:round}
 .progress-penalty-line{stroke:#e05c5c}
@@ -388,8 +387,6 @@ body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);max-w
 .progress-actual-marker{fill:#328261;stroke:var(--surface)}
 .progress-baseline-marker{fill:#969696;stroke:var(--surface)}
 .progress-chart-selection line{stroke:#969696;stroke-width:1;stroke-dasharray:2 3}
-.progress-bar{fill:#60b994}
-.progress-bar-negative{fill:var(--bad)}
 .progress-tooltip{position:fixed;z-index:20;pointer-events:none;width:max-content;max-width:min(240px, calc(100vw - 16px));background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px #1a1f3a26;padding:8px 10px;color:var(--text);font-size:12px;line-height:1.4;overflow-wrap:anywhere}
 .progress-tooltip-row{display:flex;justify-content:space-between;gap:8px}
 .progress-tooltip-row b{flex-shrink:0}
@@ -927,13 +924,10 @@ function doGet(e) {
       <div class="progress-average">
         <span>Average / день</span>
         <strong id="progress-average-value">—</strong>
-        <span id="progress-average-delta" class="progress-average-delta"></span>
       </div>
     </div>
     <div class="chart-wrap progress-plot" id="coef-chart-wrap" tabindex="0" aria-label="Накопленный прогресс. Стрелки выбирают день."></div>
     <div id="coef-chart-stats" class="progress-period-summary" hidden></div>
-    <h3 class="progress-daily-title">Ежедневный прогресс</h3>
-    <div class="chart-wrap progress-plot" id="daily-progress-chart" tabindex="0" aria-label="Ежедневный прогресс. Стрелки выбирают день."></div>
   </div>
 </div>
 
@@ -2330,10 +2324,6 @@ function renderProgressAverage(coef, today) {
   const average = days > 1 ? progressAverage(coef, days) : null;
   document.getElementById('progress-average-value').textContent =
     average === null ? '—' : progressSigned.format(average) + '%';
-  const delta = document.getElementById('progress-average-delta');
-  const difference = average === null ? 0 : average - BASELINE_DAILY_PCT;
-  delta.className = 'progress-average-delta' + progressChangeClass(difference);
-  delta.textContent = average === null ? '' : progressSigned.format(difference) + ' п.п. к Baseline';
 }
 
 function getProgressChartDates(today) {
@@ -2347,17 +2337,6 @@ function getProgressChartDates(today) {
     new Date(Date.parse(start) + i * DAY_MS).toISOString().slice(0, 10));
 }
 
-function getDailyChartBreakdown(date) {
-  if (alcohol.includes(date)) return [['Штраф за алкоголь', -alcoholPenalty]];
-  const totalWeight = habits.reduce((sum, habit) => sum + habit.weight, 0);
-  if (!totalWeight) return [];
-  // calcDayPct credits only the first workout habit and distributes it over the week.
-  const workoutHabit = habits.find(habit => habit.type === 'workout');
-  return habits.filter(habit => habit.type !== 'workout' || habit === workoutHabit)
-    .map(habit => [habit.name, getHabitContributionValue(habit, date) * (habit.weight / totalWeight)])
-    .filter(([, value]) => value !== 0);
-}
-
 function progressTooltipHeading(date) {
   return '<strong>' + formatProgressDate(date) + '</strong>' +
     '<div>День проекта: ' + progressDayNumber(date) + '</div>';
@@ -2368,34 +2347,28 @@ function progressTooltipLine(label, value, style = '') {
     '</span><b>' + value + '</b></div>';
 }
 
-function renderProgressPlot(wrap, points, daily = false) {
+function renderProgressPlot(wrap, points) {
   const W = wrap.clientWidth || 350, H = 120;
   const pad = {l: 42, r: 14, t: 14, b: 24};
   const plotWidth = W - pad.l - pad.r;
   const dx = plotWidth / Math.max(1, points.length - 1);
   const x = i => points.length === 1 ? pad.l + plotWidth / 2 : pad.l + i * dx;
-  const values = daily ? [0, ...points.map(p => p.actual)] :
-    points.flatMap(p => p.actual === null ? [p.baseline] : [p.actual, p.baseline]);
+  const values = points.flatMap(p => p.actual === null ? [p.baseline] : [p.actual, p.baseline]);
   let min = Math.min(...values), max = Math.max(...values);
   if (min === max) { min -= 0.1; max += 0.1; }
   const y = v => pad.t + (max - v) / (max - min) * (H - pad.t - pad.b);
-  const ticks = [min, (min + max) / 2, max];
+  const ticks = [min, min < 0 && max > 0 ? 0 : (min + max) / 2, max];
   const axisPct = new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 2, signDisplay: 'exceptZero'});
   const dateTicks = [...new Set([0, Math.round((points.length - 1) / 3),
     Math.round((points.length - 1) * 2 / 3), points.length - 1])];
   const chartPath = key => points.map((p, i) => p[key] === null ? '' :
     (i && points[i - 1][key] !== null ? 'L' : 'M') + x(i) + ',' + y(p[key])).join(' ');
-  const startActual = points.findIndex(p => p.actual !== null);
-  const actualPath = daily ? '' : chartPath('actual');
+  const actualPath = chartPath('actual');
   const last = points.at(-1);
-  const area = startActual < 0 || daily ? '' :
+  const area = points.some(p => p.actual === null) ? '' :
     actualPath + ' L' + x(points.length - 1) + ',' + (H - pad.b) +
-    ' L' + x(startActual) + ',' + (H - pad.b) + ' Z';
-  const barWidth = Math.min(16, dx * 0.72);
-  const series = daily ? points.map((p, i) => {
-    const zero = y(0), point = y(p.actual);
-    return `<rect x="${x(i)-barWidth/2}" y="${Math.min(zero, point)}" width="${barWidth}" height="${Math.max(1, Math.abs(point-zero))}" class="${p.actual < 0 ? 'progress-bar-negative' : 'progress-bar'}"/>`;
-  }).join('') : `
+    ' L' + x(0) + ',' + (H - pad.b) + ' Z';
+  const series = `
     <defs><linearGradient id="progress-chart-fill" x2="0" y2="1">
       <stop stop-color="#60b994" stop-opacity=".18"/><stop offset="100%" stop-color="#60b994" stop-opacity="0"/>
     </linearGradient></defs>
@@ -2405,37 +2378,31 @@ function renderProgressPlot(wrap, points, daily = false) {
     ${points.map((p, i) => i && p.actual !== null && points[i - 1].actual !== null && alcohol.includes(p.date)
       ? `<line x1="${x(i-1)}" y1="${y(points[i-1].actual)}" x2="${x(i)}" y2="${y(p.actual)}" class="progress-actual-line progress-penalty-line"/>` : '').join('')}
     ${points.length === 1 ? `<circle cx="${x(0)}" cy="${y(last.baseline)}" r="2.5" class="progress-baseline-marker"/>` : ''}
+    ${points.length > 1 && points[1].actual === null ? `<circle cx="${x(0)}" cy="${y(0)}" r="3" class="progress-actual-marker"/>` : ''}
     ${last.actual === null ? '' : `<circle cx="${x(points.length-1)}" cy="${y(last.actual)}" r="3" class="progress-actual-marker"/>`}`;
   wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-    ${ticks.map(v => `<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/><text x="${pad.l-4}" y="${y(v)+3}" text-anchor="end">${axisPct.format(daily ? v : v - 100)}%</text>`).join('')}
-    ${daily && min < 0 && max > 0 ? `<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--border)"/>` : ''}
+    ${ticks.map(v => `<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/><text x="${pad.l-4}" y="${y(v)+3}" text-anchor="end">${axisPct.format(v)}%</text>`).join('')}
     ${series}
     ${dateTicks.map(i => `<text x="${x(i)}" y="${H-6}" text-anchor="middle">${points[i].date.slice(5).split('-').reverse().join('.')}</text>`).join('')}
     <g class="progress-chart-selection" style="display:none">
       <line y1="${pad.t}" y2="${H-pad.b}"/>
-      ${daily ? '' : '<circle class="progress-baseline-marker" r="4"/>'}
+      <circle class="progress-baseline-marker" r="4"/>
       <circle class="progress-actual-marker" r="4"/>
     </g>
   </svg><div class="progress-tooltip" role="tooltip" hidden></div>`;
 
   const tooltipText = p => {
     const heading = progressTooltipHeading(p.date);
-    if (daily) {
-      const breakdown = getDailyChartBreakdown(p.date);
-      return heading + progressTooltipLine('Итог за день', progressSigned.format(p.actual) + '%', progressChangeClass(p.actual)) +
-        breakdown.map(([label, value]) => progressTooltipLine(label, progressSigned.format(value) + '%', progressChangeClass(value))).join('') +
-        (breakdown.length && habitsChangedAt && p.date < habitsChangedAt ? '<small>Разбивка по текущим настройкам</small>' : '');
-    }
-    const deviation = p.actual === null ? null : (p.actual / p.baseline - 1) * 100;
-    return heading + progressTooltipLine('Прогресс', p.actual === null ? '—' : progressSigned.format(p.actual - 100) + '%') +
-      progressTooltipLine('Baseline', progressSigned.format(p.baseline - 100) + '%') +
-      progressTooltipLine('Отклонение', deviation === null ? '—' : progressSigned.format(deviation) + '%', progressChangeClass(deviation)) +
-      (deviation === null ? '<small>До последнего изменения привычек сохранён только общий итог</small>' : '');
+    return heading + progressTooltipLine('Прогресс', p.actual === null ? '—' : progressSigned.format(p.actual) + '%') +
+      progressTooltipLine('Baseline', progressSigned.format(p.baseline) + '%') +
+      progressTooltipLine('Отклонение', p.deviation === null ? '—' : progressSigned.format(p.deviation) + '%',
+        progressChangeClass(p.deviation)) +
+      (p.actual === null ? '<small>Нет фактического значения за эту дату или на начало периода</small>' : '');
   };
-  bindProgressPlot(wrap, points, x, y, W, H, tooltipText, daily);
+  bindProgressPlot(wrap, points, x, y, W, H, tooltipText);
 }
 
-function bindProgressPlot(wrap, points, x, y, width, height, tooltipText, daily) {
+function bindProgressPlot(wrap, points, x, y, width, height, tooltipText) {
   const tooltip = wrap.querySelector('.progress-tooltip');
   const selection = wrap.querySelector('.progress-chart-selection');
   const guide = selection.querySelector('line');
@@ -2456,7 +2423,6 @@ function bindProgressPlot(wrap, points, x, y, width, height, tooltipText, daily)
     guide.setAttribute('x1', gx);
     guide.setAttribute('x2', gx);
     for (const [marker, value] of [[actual, p.actual], [baseline, p.baseline]]) {
-      if (!marker) continue;
       marker.style.display = value === null ? 'none' : '';
       if (value !== null) {
         marker.setAttribute('cx', gx);
@@ -2473,7 +2439,7 @@ function bindProgressPlot(wrap, points, x, y, width, height, tooltipText, daily)
     const pointX = rect.left + gx / width * rect.width;
     const side = pointX + gap + tooltip.offsetWidth <= screenW - gap
       ? pointX + gap : pointX - gap - tooltip.offsetWidth;
-    const pointYs = [p.actual, ...(daily ? [] : [p.baseline])].filter(v => v !== null)
+    const pointYs = [p.actual, p.baseline].filter(v => v !== null)
       .map(v => rect.top + y(v) / height * rect.height);
     const above = Math.min(...pointYs) - tooltip.offsetHeight - gap;
     const below = Math.max(...pointYs) + gap;
@@ -2531,39 +2497,48 @@ function renderCoefChart() {
   const yearBtn = document.getElementById('coef-year-btn');
   if (yearBtn) yearBtn.textContent = today.slice(0, 4);
   const wrap = document.getElementById('coef-chart-wrap');
-  const dailyWrap = document.getElementById('daily-progress-chart');
   const statsEl = document.getElementById('coef-chart-stats');
   const currentCoef = calcCoefficient();
   renderProgressAverage(currentCoef, today);
   const dates = getProgressChartDates(today);
   if (!dates.length) {
-    wrap.innerHTML = dailyWrap.innerHTML = '<div class="chart-empty">Проект ещё не начался</div>';
+    wrap.innerHTML = '<div class="chart-empty">Проект ещё не начался</div>';
     statsEl.hidden = true;
     return;
   }
 
   if (_cumCoefCache[today] === undefined) buildCumCoefCache();
-  const cumulative = dates.map(date => ({
-    date,
-    actual: date === today ? currentCoef * 100
-      : habitsChangedAt && date < habitsChangedAt ? null
-      : (_cumCoefCache[date] ?? frozenCoef) * 100,
-    baseline: progressBaseline(date)
-  }));
-  renderProgressPlot(wrap, cumulative);
-  renderProgressPlot(dailyWrap, dates.map(date => ({date, actual: calcDayPct(date)})), true);
+  const actualCoefficient = date => date === today ? currentCoef
+    : habitsChangedAt && date < habitsChangedAt ? null
+    : _cumCoefCache[date] ?? frozenCoef;
+  // All time uses the opening index, so later points include the first day's accrual.
+  const fromProjectStart = coefChartPeriod === 0;
+  const firstActual = fromProjectStart ? 1 : actualCoefficient(dates[0]);
+  const firstBaseline = fromProjectStart ? 100 : progressBaseline(dates[0]);
+  const points = dates.map((date, i) => {
+    const actual = actualCoefficient(date);
+    const baseline = progressBaseline(date);
+    return {
+      date,
+      actual: i === 0 ? 0 : actual === null || firstActual === null || firstActual === 0
+        ? null : (actual / firstActual - 1) * 100,
+      baseline: i === 0 ? 0 : (baseline / firstBaseline - 1) * 100,
+      deviation: actual === null ? null : (actual * 100 / baseline - 1) * 100
+    };
+  });
+  renderProgressPlot(wrap, points);
 
-  const improvePct = (coefChartPeriod === 0
-    ? (currentCoef - 1) * 100
-    : calcPeriodPct(dates)).toFixed(2);
+  const improvePct = points.at(-1).actual;
   const periodLabel = coefChartPeriod === -1 ? 'на этой неделе'
     : coefChartPeriod === 1 ? 'за этот месяц'
     : coefChartPeriod === 3 ? 'за ' + today.slice(0, 4) + ' год'
     : 'за всё время';
   statsEl.hidden = false;
-  statsEl.textContent = (Number(improvePct) < 0 ? 'Хуже на ' : 'Лучше на ') +
-    progressNumber.format(Math.abs(Number(improvePct))) + '% ' + periodLabel;
-  statsEl.className = 'progress-period-summary' + progressChangeClass(Number(improvePct));
+  statsEl.textContent = improvePct === null ? 'Нет данных о приросте за период'
+    : Math.abs(improvePct) < 0.005 ? 'Без изменений ' + periodLabel
+    : (improvePct < 0 ? 'Хуже на ' : 'Лучше на ') +
+      progressNumber.format(Math.abs(improvePct)) + '% ' + periodLabel;
+  statsEl.className = 'progress-period-summary' + progressChangeClass(improvePct);
 }
 
 function setPeriod(p){
